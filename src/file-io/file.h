@@ -1,3 +1,4 @@
+#pragma once
 #include <fcntl.h>      // open
 #include <unistd.h>     // write, close, lseek,fsync
 #include <cstring>      // memcpy
@@ -22,7 +23,6 @@ namespace dump {
             return false;
         }
         close(fd);
-        std::cout << "file created" << std::endl;
         return true;
 
     }
@@ -43,7 +43,6 @@ namespace dump {
             return false;
         }
 
-        std::cout << "file removed" << std::endl;
         return true;
 
     }
@@ -80,7 +79,6 @@ namespace dump {
             fsync(fd);
         }
 
-        std::cout << "Written " << totalBytesWritten << " bytes to file." << std::endl;
         return totalBytesWritten;
     }
 
@@ -96,7 +94,7 @@ namespace dump {
         return result;
     }
 
-    ssize_t read_from_file(int fd, const size_t offset, const size_t size, char *result_buffer) {
+    ssize_t read_from_file(const int fd, const size_t offset, const size_t size, char *result_buffer) {
 
         off_t seekOffset = lseek(fd, offset, SEEK_SET);
         if (seekOffset == -1) {
@@ -118,7 +116,6 @@ namespace dump {
             totalBytesRead += bytesRead;
         }
 
-        std::cout << "Read " << totalBytesRead << " bytes from file." << std::endl;
         return totalBytesRead;
     }
 

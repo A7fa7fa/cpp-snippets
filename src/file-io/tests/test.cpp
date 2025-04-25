@@ -1,4 +1,5 @@
 #include "../file.h"
+#include "../paging.h"
 #include <unistd.h>     // write, close, lseek,fsync
 #include <assert.h>
 #include <ctime>        // time
@@ -135,10 +136,160 @@ static bool test_file_use_case_header() {
 
 }
 
+static bool test_paging_header() {
+
+    std::string filename = "testfile";
+    if (dump::file_exists(filename.c_str())) {
+        // remove if exists from prev run
+        dump::delete_file(filename.c_str());
+    }
+
+    bool created = dump::create_file(filename.c_str());
+    bool exists = dump::file_exists(filename.c_str());
+    off_t size = dump::file_size(filename.c_str());
+    assert(created == true);
+    assert(exists == true);
+    assert(size == 0);
+    int fd = dump::open_file(filename.c_str());
+    assert(fd > -1);
+
+    dump::Head * head = dump::create_head();
+    head->free_list_offset = 100;
+    head->created_unix = 999;
+    assert(head->page_size == 4096);
+    ssize_t written = dump::write_head_to_file(fd, head);
+    assert(written == sizeof(dump::Head));
+    delete head;
+
+    size = dump::file_size(filename.c_str());
+    assert(size == sizeof(dump::Head));
+
+    dump::Head * read_head = new dump::Head();
+    int result = dump::read_head_from_file(fd, read_head);
+    assert(result != -1);
+    assert(read_head->free_list_offset == 100);
+    assert(read_head->created_unix == 999);
+    assert(read_head->page_size == 4096);
+
+    close(fd);
+    delete read_head;
+
+    // remove file
+    bool deleted = dump::delete_file(filename.c_str());
+    assert(deleted == true);
+
+    exists = dump::file_exists(filename.c_str());
+    assert(exists == false);
+
+    return true;
+
+}
+
+static bool test_paging_header_broken_magic() {
+
+    std::string filename = "testfile";
+    if (dump::file_exists(filename.c_str())) {
+        // remove if exists from prev run
+        dump::delete_file(filename.c_str());
+    }
+
+    bool created = dump::create_file(filename.c_str());
+    bool exists = dump::file_exists(filename.c_str());
+    off_t size = dump::file_size(filename.c_str());
+    assert(created == true);
+    assert(exists == true);
+    assert(size == 0);
+    int fd = dump::open_file(filename.c_str());
+    assert(fd > -1);
+
+    dump::Head * head = dump::create_head();
+    head->free_list_offset = 100;
+    head->created_unix = 999;
+    head->magic[2] = 'W';
+    assert(head->page_size == 4096);
+    ssize_t written = dump::write_head_to_file(fd, head);
+    assert(written == sizeof(dump::Head));
+    delete head;
+
+    size = dump::file_size(filename.c_str());
+    assert(size == sizeof(dump::Head));
+
+    dump::Head * read_head = new dump::Head();
+    int result = dump::read_head_from_file(fd, read_head);
+
+    assert(result == -1);
+    close(fd);
+    delete read_head;
+
+    // remove file
+    bool deleted = dump::delete_file(filename.c_str());
+    assert(deleted == true);
+
+    exists = dump::file_exists(filename.c_str());
+    assert(exists == false);
+
+    return true;
+
+}
+
+static bool test_paging_page() {
+
+    std::string filename = "testfile";
+    if (dump::file_exists(filename.c_str())) {
+        // remove if exists from prev run
+        dump::delete_file(filename.c_str());
+    }
+
+    bool created = dump::create_file(filename.c_str());
+    bool exists = dump::file_exists(filename.c_str());
+    off_t size = dump::file_size(filename.c_str());
+    assert(created == true);
+    assert(exists == true);
+    assert(size == 0);
+    int fd = dump::open_file(filename.c_str());
+    assert(fd > -1);
+
+    dump::Head * head = dump::create_head();
+    assert(head->page_size == 4096);
+
+    char * page = dump::create_page(head->page_size);
+    page[0] = '1';
+    page[head->page_size - 1] = '1';
+    ssize_t written = dump::write_page_to_file(fd, head->page_size, 0, page);
+    assert(written == head->page_size);
+    delete page;
+    size = dump::file_size(filename.c_str());
+    assert(size == sizeof(dump::Head) + head->page_size);
+
+
+    page = dump::create_page(head->page_size);
+    ssize_t read = dump::read_page_from_file(fd, head->page_size, 0, page);
+    assert(read == head->page_size);
+    assert(page[0] == '1');
+    assert(page[head->page_size - 1] == '1');
+
+    delete page;
+    delete head;
+    close(fd);
+
+    // remove file
+    bool deleted = dump::delete_file(filename.c_str());
+    assert(deleted == true);
+
+    exists = dump::file_exists(filename.c_str());
+    assert(exists == false);
+
+    return true;
+
+}
+
 int main() {
     try {
         test_file_use_case();
         test_file_use_case_header();
+        test_paging_header();
+        test_paging_header_broken_magic();
+        test_paging_page();
         std::cout << "Test with no errors" << std::endl;
         return EXIT_SUCCESS;
     } catch(const std::exception& e) {
@@ -146,5 +297,4 @@ int main() {
         std::cerr << e.what() << '\n';
         return EXIT_FAILURE;
     }
-
 }
